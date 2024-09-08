@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Weather App with Maps</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'weather-blue': '#72EDF2',
+                        'weather-indigo': '#5151E5',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        #map { height: 400px; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-weather-blue to-weather-indigo min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white bg-opacity-80 p-8 rounded-3xl shadow-lg max-w-3xl w-full transition-all duration-300 ease-in-out transform hover:scale-105">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Advanced Weather App with Maps</h1>
+        <div class="flex items-center mb-4">
+            <input type="text" id="cityInput" placeholder="Enter city name" class="flex-grow px-4 py-2 rounded-l-full border-2 border-gray-300 focus:outline-none focus:border-weather-indigo transition-colors duration-300">
+            <button onclick="getWeather()" class="bg-weather-indigo text-white px-6 py-2 rounded-r-full hover:bg-opacity-90 transition-colors duration-300 flex items-center">
+                <i class="fas fa-search mr-2"></i>
+                Search
+            </button>
+        </div>
+        <div id="weatherInfo" class="mt-6 opacity-0 transition-opacity duration-500 ease-in-out"></div>
+        <div id="map" class="mt-6 rounded-lg overflow-hidden shadow-md"></div>
+        <div id="mapControls" class="mt-4 flex flex-wrap justify-center gap-2"></div>
+    </div>
+
+    <script>
+        const apiKey = 'bae71c6e9998539c4ce707390729bcab';
+        let map;
+        let currentLayer;
+
+        function initMap(lat, lon) {
+            if (map) {
+                map.remove();
+            }
+            map = L.map('map').setView([lat, lon], 6);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+        }
+
+        function addWeatherLayer(layerType) {
+            if (currentLayer) {
+                map.removeLayer(currentLayer);
+            }
+            if (layerType === 'precipitation_forecast') {
+                const date = Math.floor(Date.now() / 1000); // Current timestamp
+                currentLayer = L.tileLayer(`https://maps.openweathermap.org/maps/2.0/radar/forecast/{z}/{x}/{y}?appid=${apiKey}&tm=${date}`, {
+                    attribution: '© OpenWeatherMap'
+                }).addTo(map);
+            } else {
+                currentLayer = L.tileLayer(`https://maps.openweathermap.org/maps/2.0/weather/1h/{op}/{z}/{x}/{y}?appid=${apiKey}`, {
+                    op: layerType,
+                    attribution: '© OpenWeatherMap'
+                }).addTo(map);
+            }
+        }
+
+        function createMapControls() {
+            const controls = [
+                { name: 'Temperature', layer: 'temp_new', color: 'blue' },
+                { name: 'Precipitation', layer: 'precipitation_new', color: 'green' },
+                { name: 'Wind', layer: 'wind_new', color: 'yellow' },
+                { name: 'Precipitation Forecast', layer: 'precipitation_forecast', color: 'purple' }
+            ];
+
+            const controlsContainer = document.getElementById('mapControls');
+            controlsContainer.innerHTML = controls.map(control => 
+                `<button onclick="addWeatherLayer('${control.layer}')" class="bg-${control.color}-500 text-white px-3 py-1 rounded hover:bg-${control.color}-600 transition-colors duration-300">
+                    ${control.name}
+                </button>`
+            ).join('');
+        }
+
+        async function getWeather() {
+            const city = document.getElementById('cityInput').value;
+            const weatherInfo = document.getElementById('weatherInfo');
+            
+            weatherInfo.innerHTML = '<p class="text-weather-indigo italic text-center">Loading weather data...</p>';
+            weatherInfo.classList.remove('opacity-0');
+
+            try {
+                const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&units=metric&appid=${apiKey}`);
+                
+                if (!response.ok) {
+                    throw new Error(`City not found or API error`);
+                }
+
+                const data = await response.json();
+
+                const getWeatherIcon = (weatherCode) => {
+                    const icons = {
+                        '01': 'sun',
+                        '02': 'cloud-sun',
+                        '03': 'cloud',
+                        '04': 'cloud',
+                        '09': 'cloud-showers-heavy',
+                        '10': 'cloud-rain',
+                        '11': 'bolt',
+                        '13': 'snowflake',
+                        '50': 'smog'
+                    };
+                    const iconCode = weatherCode.substring(0, 2);
+                    return icons[iconCode] || 'question';
+                };
+
+                const icon = getWeatherIcon(data.weather[0].icon);
+
+                weatherInfo.innerHTML = `
+                    <div class="text-center">
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-2">${data.name}, ${data.sys.country}</h2>
+                        <div class="flex justify-center items-center mb-4">
+                            <i class="fas fa-${icon} text-5xl text-weather-indigo mr-4"></i>
+                            <span class="text-4xl font-bold text-gray-800">${data.main.temp.toFixed(1)}°C</span>
+                        </div>
+                        <p class="text-xl text-gray-600 mb-4 capitalize">${data.weather[0].description}</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div class="bg-gray-100 p-3 rounded-lg flex items-center justify-between">
+                            <span class="text-gray-600">Humidity</span>
+                            <span class="font-semibold">${data.main.humidity}%</span>
+                        </div>
+                        <div class="bg-gray-100 p-3 rounded-lg flex items-center justify-between">
+                            <span class="text-gray-600">Wind Speed</span>
+                            <span class="font-semibold">${data.wind.speed} m/s</span>
+                        </div>
+                        <div class="bg-gray-100 p-3 rounded-lg flex items-center justify-between">
+                            <span class="text-gray-600">Pressure</span>
+                            <span class="font-semibold">${data.main.pressure} hPa</span>
+                        </div>
+                        <div class="bg-gray-100 p-3 rounded-lg flex items-center justify-between">
+                            <span class="text-gray-600">Feels Like</span>
+                            <span class="font-semibold">${data.main.feels_like.toFixed(1)}°C</span>
+                        </div>
+                    </div>
+                `;
+                weatherInfo.classList.remove('opacity-0');
+
+                initMap(data.coord.lat, data.coord.lon);
+                createMapControls();
+                addWeatherLayer('temp_new');
+            } catch (error) {
+                weatherInfo.innerHTML = `<p class="text-red-500 font-semibold text-center">Error: ${error.message}</p>`;
+                weatherInfo.classList.remove('opacity-0');
+            }
+        }
+
+        // Initialize map controls on page load
+        createMapControls();
+    </script>
+</body>
+</html>
